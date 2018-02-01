@@ -1,22 +1,17 @@
 # Maintainer: Corentin Henry <corentinhenry@gmail.com>
+#
+# Adapted from: https://packages.gentoo.org/packages/dev-lang/smlnj
+# With help from the Arch forums: https://bbs.archlinux.org/viewtopic.php?pid=1764922#p1764922
+
 pkgname=smlnj
 pkgver=110.82
 pkgrel=1
 pkgdesc="Standard ML of New Jersey compiler and libraries"
 arch=('x86_64')
-url="http://www.smlnj.org"
+url="https://www.smlnj.org"
 license=('custom')
-groups=()
 depends=("lib32-glibc")
 makedepends=("lib32-gcc-libs")
-optdepends=()
-provides=()
-conflicts=()
-replaces=()
-backup=()
-options=()
-install=
-changelog=
 
 _url="http://smlnj.cs.uchicago.edu/dist/working/$pkgver/"
 _files=("boot.x86-unix.tgz"
@@ -44,9 +39,18 @@ _files=("boot.x86-unix.tgz"
 source=("LICENSE")
 noextract=()
 for f in "${_files[@]}" ; do
-    source+=("${_url}/${f}")
+    # None of the files we download are versioned, so when the pkgver is
+    # updated and their contents change, we'll get a "One or more files did not
+    # pass the validity check" message rather than downloading the latest
+    # version. To prevent that, we append the version number to the filename.
+    #
+    # Ref: https://bbs.archlinux.org/viewtopic.php?id=234061
+    source+=("${f%.tgz}-${pkgver}.tgz::${_url}/${f}")
+
+    # We only need to extract config.tgz. The sml-nj build script takes care of
+    # the rest.
     if [ "${f}" != "config.tgz" ] ; then
-        noextract+=("${f}")
+        noextract+=("${f%.tgz}-${pkgver}.tgz")
     fi
 done
 md5sums=('fdd45f0ec2fa0006357baece04d7e0d0'
@@ -77,6 +81,13 @@ prepare() {
     # Prevent smlnj build script to download anything
     # Downloading files is done by makepkg
     echo "SRCARCHIVEURL=\"file:/${srcdir}\"" > config/srcarchiveurl
+
+    # Since we appended the version number to the filenames we downloaded, we
+    # need to create symlinks with the original name so that the sml-nj build
+    # script can find them.
+    for f in "${_files[@]}" ; do
+        ln -s "${f%.tgz}-${pkgver}.tgz" "${f}"
+    done
 }
 
 build() {
@@ -85,10 +96,10 @@ build() {
 
 package() {
     install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
-    cp -r bin lib ${pkgdir}/usr/
+    cp -r bin lib "${pkgdir}"/usr/
     for file in "${pkgdir}"/usr/bin/*; do
         # sed does some magic on the links here.
         # See https://unix.stackexchange.com/a/192017/45689 to understand why this works
-        [[ -f ${file} ]] && sed "2iSMLNJ_HOME=/usr" -i ${file}
+        [[ -f "${file}" ]] && sed "2iSMLNJ_HOME=/usr" -i "${file}"
     done
 }
